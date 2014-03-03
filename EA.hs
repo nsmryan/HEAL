@@ -1,0 +1,45 @@
+module EA(
+  ea,
+  ga,
+  evaluate,
+  maxGens,
+  fitnessCap,
+  rndPopFrom,
+  module EAMonad
+) where
+
+import EAMonad
+import Selection
+import Randomly
+import qualified Data.Traversable as T
+import Data.Sequence as S
+
+ea :: EAMonad p e -> (p -> EAMonad p e) -> (p -> EAMonad Bool e) -> EAMonad p e
+ea init gen pred = init >>= loopM pred gen' where
+  gen' p = incGen >> gen p
+loopM pred f p = do
+  b <- pred p
+  if b then return p else f p >>= loopM pred f
+
+ga init eval select recombine elit pred = let
+  gen p = recordFitness p >>= select >>= recombine >>= eval
+  gen' = if elit then elitism gen else gen in
+    ea (init >>= eval) gen' pred
+
+maxGens gens p = do
+  curgen <- getGens
+  return $ gens <= curgen
+
+fitnessCap maxfit p = return $ maxfit <= bestFit p
+
+evaluate eval p = T.mapM eval' p where
+  eval' i = do
+    fit <- eval i
+    return $ (i, fit)
+
+recordFitness p = do
+  let fit = bestFit p
+  record $! "BestFit: " ++ show fit ++ "\n"
+  return (fit `seq` p) --prevents memory leaks
+
+rndPopFrom ps is a = S.replicateM ps $ S.replicateM is $ generateFrom a
